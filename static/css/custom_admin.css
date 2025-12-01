@@ -1,0 +1,44 @@
+/* Custom Admin CSS */
+
+/* Tabela com cantos arredondados e sombra */
+.table-responsive {
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+/* Cabeçalho da tabela */
+.table thead th {
+    background-color: #2c3e50;
+    /* Azul escuro (combinando com Flatly) */
+    color: #ffffff;
+    border-bottom: none;
+}
+
+/* Linhas da tabela */
+.table tbody tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* Botões com sombras suaves */
+.btn {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border-radius: 5px;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Ajustes no Navbar */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Brand */
+.navbar-brand {
+    font-weight: bold;
+    letter-spacing: 1px;
+}

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, redirect, render_template_string, url_for, flash
+from flask import Flask, request, jsonify, redirect, render_template_string, url_for, flash, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_admin import Admin, AdminIndexView
@@ -18,6 +18,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sua_chave_secreta_super_segura') # Necessário para sessões
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['FLASK_ADMIN_SWATCH'] = 'flatly' # Tema Moderno
 
 # Inicializar Extensões
 db = SQLAlchemy(app)
@@ -72,7 +73,8 @@ class UserModelView(ModelView):
     def inaccessible_callback(self, name, **kwargs):
         return redirect(url_for('login'))
 
-admin = Admin(app, name='Bot SaaS Admin', index_view=MyAdminIndexView())
+# Inicialização do Admin com Bootstrap 4 e Template Customizado (via pasta templates/admin/master.html)
+admin = Admin(app, name='Bot SaaS Admin', template_mode='bootstrap4', index_view=MyAdminIndexView())
 admin.add_view(UserModelView(User, db.session))
 
 # --- Banco de Dados (Migração e Init) ---
@@ -184,15 +186,10 @@ def login():
             login_user(user)
             return redirect(url_for('admin.index'))
         else:
-            return "Login falhou. Verifique suas credenciais."
+            flash('Login falhou. Verifique suas credenciais.')
+            return redirect(url_for('login'))
             
-    return '''
-        <form method="post">
-            <p><input type=text name=username placeholder="Usuário">
-            <p><input type=password name=password placeholder="Senha">
-            <p><input type=submit value=Login>
-        </form>
-    '''
+    return render_template('login.html')
 
 @app.route('/logout')
 @login_required
