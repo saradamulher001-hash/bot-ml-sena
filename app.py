@@ -72,7 +72,7 @@ class UserModelView(ModelView):
     def inaccessible_callback(self, name, **kwargs):
         return redirect(url_for('login'))
 
-admin = Admin(app, name='Bot SaaS Admin', template_mode='bootstrap3', index_view=MyAdminIndexView())
+admin = Admin(app, name='Bot SaaS Admin', index_view=MyAdminIndexView())
 admin.add_view(UserModelView(User, db.session))
 
 # --- Banco de Dados (Migração e Init) ---
