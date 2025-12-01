@@ -1,10 +1,9 @@
 flask
-requests
-openai
-python-dotenv
-pyngrok
-psycopg2-binary
 gunicorn
+requests
+python-dotenv
+psycopg2-binary
+openai
 flask-admin
 flask-login
 flask-sqlalchemy
