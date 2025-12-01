@@ -155,7 +155,11 @@ def home():
 
 @app.route('/install', methods=['GET'])
 def install():
-    auth_url = f"https://auth.mercadolivre.com.br/authorization?response_type=code&client_id={ML_APP_ID}&redirect_uri={ML_REDIRECT_URI}"
+    # Hardcoded credentials as requested to avoid NoneType error
+    client_id = '4601797779457193'
+    redirect_uri = 'https://bot-mercadolivre.onrender.com/callback'
+    
+    auth_url = f"https://auth.mercadolivre.com.br/authorization?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}"
     return redirect(auth_url)
 
 @app.route('/callback', methods=['GET'])
