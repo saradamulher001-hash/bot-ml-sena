@@ -1,9 +1,13 @@
-from flask import Flask, request, jsonify, redirect
+from flask import Flask, request, jsonify, redirect, render_template_string, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_admin import Admin, AdminIndexView
+from flask_admin.contrib.sqla import ModelView
 from dotenv import load_dotenv
 import requests
 import os
-import psycopg2
 from openai import OpenAI
+from sqlalchemy import text
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -11,71 +15,85 @@ load_dotenv()
 app = Flask(__name__)
 
 # Configurações
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-ML_APP_ID = os.getenv('ML_APP_ID')
-ML_CLIENT_SECRET = os.getenv('ML_CLIENT_SECRET')
-ML_REDIRECT_URI = os.getenv('ML_REDIRECT_URI', 'https://bot-mercadolivre.onrender.com/callback')
-DATABASE_URL = os.getenv('DATABASE_URL')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sua_chave_secreta_super_segura') # Necessário para sessões
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Inicializar cliente OpenAI
+# Inicializar Extensões
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# --- Banco de Dados (PostgreSQL) ---
+# --- Modelos ---
 
-def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL)
-    return conn
+# Modelo do Cliente SaaS (Tabela 'users' no Banco)
+class User(db.Model):
+    __tablename__ = 'users'
+    user_id = db.Column(db.BigInteger, primary_key=True)
+    access_token = db.Column(db.Text)
+    refresh_token = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    def __repr__(self):
+        return f'<User {self.user_id}>'
+
+# Modelo do Administrador (Para Login)
+class AdminUser(UserMixin):
+    id = 1
+
+@login_manager.user_loader
+def load_user(user_id):
+    if user_id == '1':
+        return AdminUser()
+    return None
+
+# --- Admin Views ---
+
+class MyAdminIndexView(AdminIndexView):
+    def is_accessible(self):
+        return current_user.is_authenticated
+
+    def inaccessible_callback(self, name, **kwargs):
+        return redirect(url_for('login'))
+
+class UserModelView(ModelView):
+    column_list = ('user_id', 'is_active', 'access_token')
+    form_columns = ('user_id', 'is_active', 'access_token', 'refresh_token')
+    can_create = False # Geralmente criado via OAuth
+    can_delete = True
+    can_edit = True
+    
+    def is_accessible(self):
+        return current_user.is_authenticated
+
+    def inaccessible_callback(self, name, **kwargs):
+        return redirect(url_for('login'))
+
+admin = Admin(app, name='Bot SaaS Admin', template_mode='bootstrap3', index_view=MyAdminIndexView())
+admin.add_view(UserModelView(User, db.session))
+
+# --- Banco de Dados (Migração e Init) ---
 
 def init_db():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id BIGINT PRIMARY KEY,
-                access_token TEXT,
-                refresh_token TEXT
-            )
-        ''')
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("Banco de dados (PostgreSQL) inicializado/verificado.")
-    except Exception as e:
-        print(f"Erro ao inicializar banco de dados: {e}")
-
-def save_user(user_id, access_token, refresh_token):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO users (user_id, access_token, refresh_token)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (user_id) DO UPDATE SET
-                access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token
-        ''', (user_id, access_token, refresh_token))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print(f"Usuário {user_id} salvo/atualizado no PostgreSQL.")
-    except Exception as e:
-        print(f"Erro ao salvar usuário: {e}")
-
-def get_user_token(user_id):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT access_token FROM users WHERE user_id = %s', (user_id,))
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        if row:
-            return row[0]
-        return None
-    except Exception as e:
-        print(f"Erro ao recuperar token: {e}")
-        return None
+    with app.app_context():
+        # Cria tabelas se não existirem
+        db.create_all()
+        
+        # Migração Manual: Adicionar coluna is_active se não existir
+        try:
+            inspector = db.inspect(db.engine)
+            columns = [col['name'] for col in inspector.get_columns('users')]
+            if 'is_active' not in columns:
+                print("Migrando banco de dados: Adicionando coluna 'is_active'...")
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE"))
+                    conn.commit()
+                print("Migração concluída.")
+        except Exception as e:
+            print(f"Erro na verificação/migração do banco: {e}")
 
 # --- Funções Auxiliares ML ---
 
@@ -151,7 +169,36 @@ def gerar_resposta_ia(pergunta_texto, item_info):
 
 @app.route('/', methods=['GET'])
 def home():
-    return 'Bot SaaS Multi-Tenant (PostgreSQL) Online'
+    return 'Bot SaaS Multi-Tenant (PostgreSQL + Admin) Online'
+
+# Rota de Login do Admin
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # Hardcoded Admin Credentials
+        if username == 'admin' and password == 'suasenha123':
+            user = AdminUser()
+            login_user(user)
+            return redirect(url_for('admin.index'))
+        else:
+            return "Login falhou. Verifique suas credenciais."
+            
+    return '''
+        <form method="post">
+            <p><input type=text name=username placeholder="Usuário">
+            <p><input type=password name=password placeholder="Senha">
+            <p><input type=submit value=Login>
+        </form>
+    '''
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('home'))
 
 @app.route('/install', methods=['GET'])
 def install():
@@ -174,8 +221,8 @@ def callback():
         CLIENT_ID = os.getenv('APP_ID')
     
     if not CLIENT_ID:
-        print("Erro Crítico: CLIENT_ID/APP_ID não definido.")
-        return "Erro interno: Configuração de Client ID ausente.", 500
+        # Fallback para o hardcoded se env falhar, para manter consistência com /install
+        CLIENT_ID = '4601797779457193'
 
     # Tenta obter o secret de várias formas para garantir
     CLIENT_SECRET = os.getenv('CLIENT_SECRET')
@@ -208,7 +255,17 @@ def callback():
         refresh_token = response_data.get('refresh_token')
         user_id = response_data.get('user_id')
         
-        save_user(user_id, access_token, refresh_token)
+        # Salvar usando SQLAlchemy
+        user = User.query.get(user_id)
+        if not user:
+            user = User(user_id=user_id)
+        
+        user.access_token = access_token
+        user.refresh_token = refresh_token
+        # is_active já é True por padrão
+        
+        db.session.add(user)
+        db.session.commit()
         
         return f"Instalação concluída com sucesso! User ID: {user_id}"
     except Exception as e:
@@ -227,12 +284,19 @@ def notifications():
     if topic == 'questions':
         print(f"\n--- Notificação para User {user_id} ---")
         
-        # Buscar token do usuário
-        token = get_user_token(user_id)
-        if not token:
+        # Buscar usuário no Banco (SQLAlchemy)
+        user = User.query.get(user_id)
+        
+        if not user:
             print(f"Ignorando: Token não encontrado para o usuário {user_id}")
             return jsonify({'status': 'ignored', 'reason': 'user_not_found'}), 200
+        
+        # --- REGRA DE NEGÓCIO: Verificar se está ativo ---
+        if not user.is_active:
+            print(f"Ignorando: Usuário {user_id} está INATIVO.")
+            return jsonify({'status': 'ignored', 'reason': 'user_inactive'}), 200
             
+        token = user.access_token
         resource = data.get('resource')
         
         # 1. Buscar pergunta
