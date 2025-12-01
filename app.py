@@ -14,7 +14,7 @@ app = Flask(__name__)
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 ML_APP_ID = os.getenv('ML_APP_ID')
 ML_CLIENT_SECRET = os.getenv('ML_CLIENT_SECRET')
-ML_REDIRECT_URI = os.getenv('ML_REDIRECT_URI')
+ML_REDIRECT_URI = os.getenv('ML_REDIRECT_URI', 'https://bot-mercadolivre.onrender.com/callback')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 # Inicializar cliente OpenAI
