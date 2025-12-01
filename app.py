@@ -164,24 +164,45 @@ def callback():
     if not code:
         return "Erro: Código não fornecido.", 400
     
+    # Robustez nas Variáveis
+    CLIENT_ID = os.getenv('CLIENT_ID')
+    if not CLIENT_ID:
+        CLIENT_ID = os.getenv('APP_ID')
+    
+    if not CLIENT_ID:
+        print("Erro Crítico: CLIENT_ID/APP_ID não definido.")
+        return "Erro interno: Configuração de Client ID ausente.", 500
+
+    # Tenta obter o secret de várias formas para garantir
+    CLIENT_SECRET = os.getenv('CLIENT_SECRET')
+    if not CLIENT_SECRET:
+        CLIENT_SECRET = os.getenv('ML_CLIENT_SECRET')
+
+    redirect_uri = 'https://bot-mercadolivre.onrender.com/callback'
+
+    # Debug Logs
+    print(f"Tentando login com Client ID: {CLIENT_ID} e Redirect: {redirect_uri}")
+    
     # Trocar code por token
     url = "https://api.mercadolibre.com/oauth/token"
-    payload = {
+    
+    # Payload Explícito
+    data = {
         'grant_type': 'authorization_code',
-        'client_id': ML_APP_ID,
-        'client_secret': ML_CLIENT_SECRET,
+        'client_id': CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
         'code': code,
-        'redirect_uri': ML_REDIRECT_URI
+        'redirect_uri': redirect_uri
     }
     
     try:
-        response = requests.post(url, data=payload)
+        response = requests.post(url, data=data)
         response.raise_for_status()
-        data = response.json()
+        response_data = response.json()
         
-        access_token = data.get('access_token')
-        refresh_token = data.get('refresh_token')
-        user_id = data.get('user_id')
+        access_token = response_data.get('access_token')
+        refresh_token = response_data.get('refresh_token')
+        user_id = response_data.get('user_id')
         
         save_user(user_id, access_token, refresh_token)
         
@@ -189,6 +210,7 @@ def callback():
     except Exception as e:
         print(f"Erro no callback: {e}")
         if 'response' in locals() and response is not None:
+             print(f"Response Body: {response.text}")
              return f"Erro ao obter token: {response.text}", 500
         return f"Erro interno: {e}", 500
 
