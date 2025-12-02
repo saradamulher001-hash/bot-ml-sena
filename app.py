@@ -253,24 +253,27 @@ def callback():
         user_id = response_data.get('user_id')
         
         # Salvar usando SQLAlchemy
-        user = User.query.get(user_id)
-        if not user:
-            user = User(user_id=user_id)
+        # Salvar usando SQLAlchemy com merge (Upsert)
+        # Isso garante que se o usuário já existir, ele será atualizado. Se não, será criado.
+        # Funciona como o ON CONFLICT do PostgreSQL.
+        user = User(
+            user_id=user_id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            is_active=True
+        )
         
-        user.access_token = access_token
-        user.refresh_token = refresh_token
-        # is_active já é True por padrão
-        
-        db.session.add(user)
+        db.session.merge(user)
         db.session.commit()
         
         return f"Instalação concluída com sucesso! User ID: {user_id}"
     except Exception as e:
+        db.session.rollback() # Importante fazer rollback em caso de erro no banco
         print(f"Erro no callback: {e}")
         if 'response' in locals() and response is not None:
              print(f"Response Body: {response.text}")
-             return f"Erro ao obter token: {response.text}", 500
-        return f"Erro interno: {e}", 500
+        # Retorna o erro real para facilitar o debug
+        return f"Erro interno ao processar callback: {str(e)}", 500
 
 @app.route('/notifications', methods=['POST'])
 def notifications():
