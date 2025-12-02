@@ -74,7 +74,7 @@ class UserModelView(ModelView):
         return redirect(url_for('login'))
 
 # Inicialização do Admin com Bootstrap 4 e Template Customizado (via pasta templates/admin/master.html)
-admin = Admin(app, name='Bot Admin', template_mode='bootstrap3', index_view=MyAdminIndexView())
+admin = Admin(app, name='Bot Admin', index_view=MyAdminIndexView())
 admin.add_view(UserModelView(User, db.session))
 
 # --- Banco de Dados (Migração e Init) ---
