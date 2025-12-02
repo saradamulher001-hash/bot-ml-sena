@@ -18,7 +18,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sua_chave_secreta_super_segura') # Necessário para sessões
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['FLASK_ADMIN_SWATCH'] = 'cerulean' # Tema Moderno
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Inicializar Extensões
 db = SQLAlchemy(app)
@@ -74,7 +74,7 @@ class UserModelView(ModelView):
         return redirect(url_for('login'))
 
 # Inicialização do Admin com Bootstrap 4 e Template Customizado (via pasta templates/admin/master.html)
-admin = Admin(app, name='Bot Admin', index_view=MyAdminIndexView()) # Fixed: removed template_mode
+admin = Admin(app, name='Bot Admin', template_mode='bootstrap3', index_view=MyAdminIndexView())
 admin.add_view(UserModelView(User, db.session))
 
 # --- Banco de Dados (Migração e Init) ---
